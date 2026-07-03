@@ -63,6 +63,44 @@ final class FileManagerKitTests: XCTestCase {
         XCTAssertThrowsError(try store.rename(other, to: "taken"))
     }
 
+    func testRecursiveSearch() throws {
+        let store = DocumentFileStore(root: root)
+        let folder = try store.createFolder(named: "Sub", in: root)
+        _ = try store.save(Data(), name: "report-2026.pdf", in: folder.url)
+        _ = try store.save(Data(), name: "notes.txt", in: root)
+
+        let hits = try store.search("report", in: root)
+        XCTAssertEqual(hits.count, 1)
+        XCTAssertEqual(hits.first?.displayName, "report-2026")
+    }
+
+    @MainActor
+    func testCutAndPasteMovesAcrossFolders() throws {
+        let store = DocumentFileStore(root: root)
+        let file = try store.save(Data(), name: "move-me.txt", in: root)
+        let folder = try store.createFolder(named: "Dest", in: root)
+
+        let clipboard = FileClipboard()
+        let source = FilesModel(store: store, directory: root, clipboard: clipboard)
+        source.cut([file])
+        XCTAssertTrue(source.canPaste)
+
+        let dest = FilesModel(store: store, directory: folder.url, clipboard: clipboard)
+        dest.paste()
+        XCTAssertEqual(dest.items.count, 1)
+        XCTAssertEqual(try store.contents(of: folder.url).count, 1)
+    }
+
+    @MainActor
+    func testSearchTextFilters() throws {
+        let store = DocumentFileStore(root: root)
+        _ = try store.save(Data(), name: "apple.txt", in: root)
+        _ = try store.save(Data(), name: "banana.txt", in: root)
+        let model = FilesModel(store: store, directory: root)
+        model.searchText = "app"
+        XCTAssertEqual(model.visibleItems.count, 1)
+    }
+
     @MainActor
     func testFilesModelSelectionAndSort() {
         let store = DocumentFileStore(root: root)

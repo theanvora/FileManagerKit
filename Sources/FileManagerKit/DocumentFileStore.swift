@@ -26,6 +26,22 @@ public struct DocumentFileStore: FileStore {
         return urls.map(FileItem.init(url:))
     }
 
+    public func search(_ query: String, in directory: URL) throws -> [FileItem] {
+        guard !query.isEmpty,
+              let enumerator = fileManager.enumerator(
+                at: directory,
+                includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey],
+                options: [.skipsHiddenFiles]
+              )
+        else { return [] }
+
+        var results: [FileItem] = []
+        for case let url as URL in enumerator where url.lastPathComponent.localizedCaseInsensitiveContains(query) {
+            results.append(FileItem(url: url))
+        }
+        return results
+    }
+
     @discardableResult
     public func createFolder(named name: String, in directory: URL) throws -> FileItem {
         let url = uniqueURL(baseName: name, extension: nil, in: directory)

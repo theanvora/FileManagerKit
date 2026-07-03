@@ -20,15 +20,26 @@ public final class FilesModel {
     public private(set) var items: [FileItem] = []
     public let directory: URL
     public var sort: Sort = .dateNewest { didSet { items = sorted(items) } }
+    /// In-folder name filter applied to `visibleItems`.
+    public var searchText: String = ""
     public private(set) var isSelecting = false
     public private(set) var selection: Set<URL> = []
     public private(set) var errorMessage: String?
 
-    @ObservationIgnored private let store: any FileStore
+    /// Items after applying `searchText` (what the list should render).
+    public var visibleItems: [FileItem] {
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return items }
+        return items.filter { $0.displayName.localizedCaseInsensitiveContains(query) }
+    }
 
-    public init(store: any FileStore, directory: URL? = nil) {
+    @ObservationIgnored private let store: any FileStore
+    @ObservationIgnored private let clipboard: FileClipboard
+
+    public init(store: any FileStore, directory: URL? = nil, clipboard: FileClipboard = FileClipboard()) {
         self.store = store
         self.directory = directory ?? store.root
+        self.clipboard = clipboard
         reload()
     }
 
@@ -61,6 +72,43 @@ public final class FilesModel {
 
     public func duplicate(_ item: FileItem) {
         perform { _ = try store.duplicate(item) }
+    }
+
+    public func copy(_ targets: [FileItem], to destination: URL) {
+        perform { for item in targets { _ = try store.copy(item, to: destination) } }
+    }
+
+    /// Recursive name search from this directory (does not mutate `items`).
+    public func search(_ query: String) -> [FileItem] {
+        (try? store.search(query, in: directory)) ?? []
+    }
+
+    // MARK: - Clipboard (cut / copy / paste)
+
+    public func cut(_ targets: [FileItem]) {
+        clipboard.set(.cut, targets)
+        setSelecting(false)
+    }
+
+    public func copyToClipboard(_ targets: [FileItem]) {
+        clipboard.set(.copy, targets)
+        setSelecting(false)
+    }
+
+    public var canPaste: Bool { !clipboard.isEmpty }
+
+    /// Paste the shared clipboard into the current directory — moves (cut) or copies.
+    public func paste() {
+        guard let action = clipboard.action, !clipboard.items.isEmpty else { return }
+        perform {
+            for item in clipboard.items {
+                switch action {
+                case .cut:  _ = try store.move(item, to: directory)
+                case .copy: _ = try store.copy(item, to: directory)
+                }
+            }
+        }
+        clipboard.clear()
     }
 
     public func delete(_ targets: [FileItem]) {

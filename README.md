@@ -14,8 +14,13 @@ Files-app-style collision naming — behind a testable port.
 - **`FileStore`** — the operations port; **`DocumentFileStore`** implements it over
   `FileManager` with auto-increment naming (`"note (1)"`) on collision.
 - **`FilesModel`** — an `@Observable` view model: sorting (folders first), multi-select,
-  navigation into folders, and all operations forwarded to the port.
+  **search** (`searchText` / recursive `search(_:)`), navigation into folders, and all
+  operations forwarded to the port.
+- **`FileClipboard`** — shared **cut / copy / paste** across folders.
 - **`FileThumbnail`** — QuickLook thumbnails for any file type.
+
+> Merge is format-specific (e.g. combining PDFs) — feed `selectedItems` to
+> [PDFKitWrapper](https://github.com/theanvora/PDFKitWrapper)'s `PDFDocument.merged`.
 
 ## Installation
 
@@ -40,6 +45,16 @@ files.createFolder(named: "Invoices")
 files.rename(item, to: "March")
 files.duplicate(item)
 files.deleteSelected()
+
+// Search
+files.searchText = "invoice"          // filters files.visibleItems
+let hits = files.search("2026")       // recursive
+
+// Cut / copy / paste across folders (share one FileClipboard)
+let clipboard = FileClipboard()
+let a = FilesModel(store: store, directory: folderA, clipboard: clipboard)
+let b = FilesModel(store: store, directory: folderB, clipboard: clipboard)
+a.cut(a.selectedItems); b.paste()
 
 // Thumbnail
 let image = await FileThumbnail.generate(for: item.url, size: CGSize(width: 80, height: 100))

@@ -21,6 +21,9 @@ public protocol FileStore: Sendable {
 
     func contents(of directory: URL) throws -> [FileItem]
 
+    /// Recursively find items whose name contains `query` (case-insensitive).
+    func search(_ query: String, in directory: URL) throws -> [FileItem]
+
     @discardableResult
     func createFolder(named name: String, in directory: URL) throws -> FileItem
 
