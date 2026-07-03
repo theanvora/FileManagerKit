@@ -39,6 +39,20 @@ final class FileManagerKitTests: XCTestCase {
         XCTAssertEqual(try store.contents(of: root).count, 2)
     }
 
+    func testCollisionReusesSmallestFreeGap() throws {
+        let store = DocumentFileStore(root: root)
+        let a = try store.save(Data(), name: "note.txt", in: root)   // note
+        let b = try store.save(Data(), name: "note.txt", in: root)   // note (1)
+        _ = try store.save(Data(), name: "note.txt", in: root)       // note (2)
+        XCTAssertEqual(a.displayName, "note")
+        XCTAssertEqual(b.displayName, "note (1)")
+
+        // Free up the (1) slot, then the next save should reuse it — not jump to (3).
+        try store.delete(b)
+        let reused = try store.save(Data(), name: "note.txt", in: root)
+        XCTAssertEqual(reused.displayName, "note (1)")
+    }
+
     func testFolderRenameDuplicateDelete() throws {
         let store = DocumentFileStore(root: root)
         let folder = try store.createFolder(named: "Docs", in: root)

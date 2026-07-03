@@ -102,17 +102,37 @@ public struct DocumentFileStore: FileStore {
         return uniqueURL(baseName: base, extension: ext, in: directory)
     }
 
+    /// Collision-safe name in `directory`. Reads the directory **once** and picks
+    /// the smallest free `" (n)"` index (reusing gaps) — instead of probing the
+    /// filesystem with a `fileExists` syscall per candidate.
     private func uniqueURL(baseName: String, extension ext: String?, in directory: URL) -> URL {
-        func make(_ name: String) -> URL {
+        func compose(_ name: String) -> URL {
             let url = directory.appendingPathComponent(name)
             return ext.map { url.appendingPathExtension($0) } ?? url
         }
-        var candidate = make(baseName)
-        var counter = 1
-        while fileManager.fileExists(atPath: candidate.path) {
-            candidate = make("\(baseName) (\(counter))")
-            counter += 1
+
+        let existing = Set((try? fileManager.contentsOfDirectory(atPath: directory.path)) ?? [])
+        let fullExtension = ext.map { ".\($0)" } ?? ""
+
+        // Index 0 = the bare name.
+        if !existing.contains("\(baseName)\(fullExtension)") {
+            return compose(baseName)
         }
-        return candidate
+
+        // Gather taken " (n)" indices in one pass, then take the smallest free one.
+        let openPrefix = "\(baseName) ("
+        let closeSuffix = ")\(fullExtension)"
+        var taken: Set<Int> = []
+        for name in existing
+        where name.hasPrefix(openPrefix)
+            && name.hasSuffix(closeSuffix)
+            && name.count > openPrefix.count + closeSuffix.count {
+            let inner = name.dropFirst(openPrefix.count).dropLast(closeSuffix.count)
+            if let index = Int(inner), index > 0 { taken.insert(index) }
+        }
+
+        var index = 1
+        while taken.contains(index) { index += 1 }   // in-memory O(1) lookups
+        return compose("\(baseName) (\(index))")
     }
 }
