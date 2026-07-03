@@ -30,7 +30,9 @@ public struct DocumentFileStore: FileStore {
         guard !query.isEmpty,
               let enumerator = fileManager.enumerator(
                 at: directory,
-                includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey],
+                // Prefetch exactly the keys FileItem reads, so building a match
+                // hits the cache instead of an extra stat per file.
+                includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .creationDateKey, .contentModificationDateKey],
                 options: [.skipsHiddenFiles]
               )
         else { return [] }
